@@ -219,7 +219,76 @@ def main():
     Main entry point for execution as a program (instead of as a module).
     """
 
-    args = parse_args()
+    try:
+        args = parse_args()
+    except SystemExit as e:
+        # Check if it's because the user provided a CAUTH token without username
+        import sys
+        if len(sys.argv) > 1 and any('-ca' in arg or '--cauth' in arg for arg in sys.argv):
+            # Recreate the args with our custom logic
+            import argparse
+            parser = argparse.ArgumentParser(description='Download Coursera.org lecture material and resources.')
+            parser.add_argument('class_names', nargs='*', help='name(s) of the class(es) (e.g. "ml-005")')
+            parser.add_argument('-ca', '--cauth', dest='cookies_cauth', action='store', help='cauth cookie value from browser')
+            parser.add_argument('--debug', action='store_true', help='print lots of debug information')
+            parser.add_argument('--path', dest='path', action='store', default='', help='path to where to save the file')
+            parser.add_argument('-o', '--overwrite', action='store_true', default=False, help='whether existing files should be overwritten')
+            parser.add_argument('--unrestricted-filenames', action='store_true', default=False, help='Do not limit filenames to be ASCII-only')
+            parser.add_argument('-sf', '--section_filter', dest='section_filter', action='store', default=None, help='only download sections which contain this regex')
+            parser.add_argument('-lf', '--lecture_filter', dest='lecture_filter', action='store', default=None, help='only download lectures which contain this regex')
+            parser.add_argument('-rf', '--resource_filter', dest='resource_filter', action='store', default=None, help='only download resources which match this regex')
+            
+            # Parse just the needed arguments
+            args, _ = parser.parse_known_args()
+            
+            # Set dummy values for username and password
+            args.username = 'cauth_user'
+            args.password = 'cauth_pass'
+            args.netrc = False
+            args.cookies_file = None
+            args.list_courses = False
+            args.version = False
+            args.use_keyring = False
+            args.clear_cache = False
+            args.file_formats = 'all'
+            args.ignore_formats = None
+            args.quiet = False
+            args.resume = False
+            args.verbose_dirs = False
+            args.reverse = False
+            args.combined_section_lectures_nums = False
+            args.mathjax_cdn_url = 'https://cdn.mathjax.org/mathjax/latest/MathJax.js'
+            args.download_quizzes = False
+            args.download_notebooks = False
+            args.about = False
+            args.specialization = False
+            args.playlist = False
+            args.hooks = []
+            args.skip_download = False
+            args.cache_syllabus = False
+            args.local_page = None
+            args.jobs = 1
+            args.download_delay = 60
+            args.preview = False
+            args.subtitle_language = 'all'
+            args.video_resolution = '540p'
+            args.disable_url_skipping = False
+            args.downloader_arguments = []
+            args.only_syllabus = False
+            args.wget = None
+            args.curl = None
+            args.aria2 = None
+            args.axel = None
+            
+            # Initialize logging based on debug flag
+            if args.debug:
+                logging.basicConfig(level=logging.DEBUG, format='%(name)s[%(funcName)s] %(message)s')
+            else:
+                logging.basicConfig(level=logging.INFO, format='%(message)s')
+        else:
+            # Re-raise the exception if it's not related to our case
+            raise
+    
     logging.info('coursera_dl version %s', __version__)
     completed_classes = []
     classes_with_errors = []

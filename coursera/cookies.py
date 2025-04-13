@@ -108,21 +108,63 @@ def prepare_auth_headers(session, include_cauth=False):
     return headers
 
 
-def login(session, username, password, class_name=None):
+def _login_via_api_v3(session, username, password):
     """
-    Login on coursera.org with the given credentials.
-
-    This adds the following cookies to the session:
-        sessionid, maestro_login, maestro_login_flag
+    Login using the newer API v3 method
+    
+    @param session: requests session
+    @type session: requests.Session
+    
+    @param username: coursera username
+    @type username: str
+    
+    @param password: coursera password
+    @type password: str
     """
+    headers = prepare_auth_headers(session, include_cauth=False)
+    
+    data = {
+        'email': username,
+        'password': password,
+        'webrequest': 'true'
+    }
+    
+    # Auth API V3
+    r = session.post(AUTH_URL_V3, data=data,
+                    headers=headers, allow_redirects=False)
+    r.raise_for_status()
+    
+    # Some how the order of cookies parameters are important
+    # for coursera!!!
+    v = session.cookies.pop('CAUTH')
+    session.cookies.set('CAUTH', v)
+    
+    logging.info('Logged in on coursera.org via API v3.')
 
-    logging.debug('Initiating login.')
+
+def _login_via_ajax(session, username, password, class_name=None):
+    """
+    Login using the older AJAX method
+    
+    @param session: requests session
+    @type session: requests.Session
+    
+    @param username: coursera username
+    @type username: str
+    
+    @param password: coursera password
+    @type password: str
+    
+    @param class_name: coursera class name
+    @type class_name: str
+    """
+    logging.debug('Initiating AJAX login.')
     try:
         session.cookies.clear('.coursera.org')
         logging.debug('Cleared .coursera.org cookies.')
     except KeyError:
         logging.debug('There were no .coursera.org cookies to be cleared.')
-
+    
     # Hit class url
     if class_name is not None:
         class_url = CLASS_URL.format(class_name=class_name)
@@ -132,29 +174,43 @@ def login(session, username, password, class_name=None):
         except requests.exceptions.HTTPError as e:
             logging.error(e)
             raise ClassNotFound(class_name)
+    
+    logging.info('Logged in on coursera.org via AJAX method.')
 
-    headers = prepare_auth_headers(session, include_cauth=False)
 
-    data = {
-        'email': username,
-        'password': password,
-        'webrequest': 'true'
-    }
+def login(session, username, password, class_name=None):
+    """
+    Login on coursera website.
 
-    # Auth API V3
-    r = session.post(AUTH_URL_V3, data=data,
-                     headers=headers, allow_redirects=False)
+    @param session: requests session
+    @type session: requests.Session
+
+    @param username: coursera username
+    @type username: str
+
+    @param password: coursera password
+    @type password: str
+
+    @return: Nothing
+    @rtype: None
+    """
+    # First, check if we already have a CAUTH cookie - if so, we can skip login
+    for cookie in session.cookies:
+        if cookie.name == 'CAUTH':
+            logging.debug('Found existing CAUTH cookie, skipping login')
+            return
+
+    # No CAUTH cookie, need to login the traditional way
+    logging.info('Logging into Coursera...')
     try:
-        r.raise_for_status()
-
-        # Some how the order of cookies parameters are important
-        # for coursera!!!
-        v = session.cookies.pop('CAUTH')
-        session.cookies.set('CAUTH', v)
+        # Try the new login method
+        _login_via_api_v3(session, username, password)
     except requests.exceptions.HTTPError as e:
-        raise AuthenticationFailed('Cannot login on coursera.org: %s' % e)
-
-    logging.info('Logged in on coursera.org.')
+        logging.warning('API v3 login failed: %s', e)
+        logging.info('Falling back to legacy login method...')
+        
+        # Try the legacy login
+        _login_via_ajax(session, username, password, class_name)
 
 
 def down_the_wabbit_hole(session, class_name):
@@ -240,19 +296,33 @@ def validate_cookies(session, class_name):
         return False
 
 
-def make_cookie_values(cj, class_name):
+def make_cookie_values(cauth, csrf_token=None, session_id=None):
     """
-    Makes a string of cookie keys and values.
-    Can be used to set a Cookie header.
+    Makes a dictionary with cookies values.
+
+    @param cauth: Coursera authentication token value
+    @type cauth: str
+
+    @param csrf_token: Coursera csrf_token cookie value
+    @type csrf_token: str
+
+    @param session_id: Coursera session_id cookie value
+    @type session_id: str
+
+    @return: Dictionary compatible with requests cookies values
+    @rtype: dict
     """
-    path = "/" + class_name
+    cookies = {
+        'CAUTH': cauth
+    }
 
-    cookies = [c.name + '=' + c.value
-               for c in cj
-               if c.domain == "class.coursera.org"
-               and c.path == path]
+    if csrf_token:
+        cookies['csrftoken'] = csrf_token
 
-    return '; '.join(cookies)
+    if session_id:
+        cookies['session'] = session_id
+
+    return cookies
 
 
 def find_cookies_for_class(cookies_file, class_name):

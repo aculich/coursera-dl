@@ -500,7 +500,12 @@ def parse_args(args=None):
         logging.error('Cookies file not found: %s', args.cookies_file)
         sys.exit(1)
 
-    if not args.cookies_file and not args.cookies_cauth:
+    # If CAUTH token is provided, we don't need username/password
+    if args.cookies_cauth:
+        # Set dummy values just so the script doesn't complain
+        args.username = 'cauth_user'
+        args.password = 'cauth_pass'
+    elif not args.cookies_file:  # No CAUTH and no cookies file, need username/password
         try:
             args.username, args.password = get_credentials(
                 username=args.username, password=args.password,

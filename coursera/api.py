@@ -314,12 +314,31 @@ class OnDemandCourseMaterialItemsV1(object):
         @return: Instance of OnDemandCourseMaterialItems
         @rtype: OnDemandCourseMaterialItems
         """
-
-        dom = get_page(session, OPENCOURSE_ONDEMAND_COURSE_MATERIALS,
-                       json=True,
-                       class_name=course_name)
-        return OnDemandCourseMaterialItemsV1(
-            dom['linked']['onDemandCourseMaterialItems.v1'])
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Referer': 'https://www.coursera.org/learn/' + course_name
+            }
+            
+            dom = get_page(session, OPENCOURSE_ONDEMAND_COURSE_MATERIALS,
+                           json=True, class_name=course_name,
+                           headers=headers)
+            
+            # Check if we have the expected structure
+            if 'linked' in dom and 'onDemandCourseMaterialItems.v1' in dom['linked']:
+                return OnDemandCourseMaterialItemsV1(
+                    dom['linked']['onDemandCourseMaterialItems.v1'])
+            else:
+                logging.warning('API response does not contain expected course material items')
+                # Return an empty instance to avoid errors
+                return OnDemandCourseMaterialItemsV1([])
+                
+        except Exception as e:
+            logging.error('Error creating OnDemandCourseMaterialItemsV1: %s', e)
+            # Return an empty instance to avoid errors
+            return OnDemandCourseMaterialItemsV1([])
 
     def get(self, lesson_id):
         """

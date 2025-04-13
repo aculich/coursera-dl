@@ -90,7 +90,18 @@ def get_page(session,
     url = url.format(**kwargs)
     reply = get_reply(session, url, post=post, data=data, headers=headers,
                       quiet=quiet)
-    return reply.json() if json else reply.text
+    
+    if json:
+        try:
+            return reply.json()
+        except ValueError as e:
+            if not quiet:
+                logging.error("Error parsing JSON response for %s: %s", url, e)
+                logging.error("Response content: %s", reply.text[:100] + "..." if len(reply.text) > 100 else reply.text)
+            # Return empty dict as fallback to avoid None object issues
+            return {}
+    else:
+        return reply.text
 
 
 def get_page_and_url(session, url):
